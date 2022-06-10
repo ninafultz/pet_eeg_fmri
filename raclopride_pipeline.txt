@@ -1,0 +1,173 @@
+# raclopride analysis
+# Nina Fultz May 2022
+
+# overview:                      
+                                                                           
+# 1) mr data analysis                   
+# 2) memprage removal of eeg electrodes/recon pet data
+# 3) pet analysis                                              
+# 4) eeg analysis              
+# 5) figures     
+
+#########################################################################################
+# MR data analysis 1) mr analysis - Preprocessing fMRI BU PIPELINE for raclropride project 
+# 
+# Nina June 2021                                                                
+## overview: all scripts are in /ad/eng/research/eng_research_lewislab/users/nfultz/scripts/pet_analysis
+
+# 1) unpacking
+# 2) rearranging scripts
+# 2) run recon
+# 3) slice time correct 
+# 4) motion correct in FSL (change, ask dg)
+# 5) register functional runs to anatomical runs
+# 6) make a ventricle timeseries/detrend
+# 7) make cortex time series/detrend
+# 8) figuring out where person fell asleep
+
+## 1) unpack, convert to niftis, make organized folders on nutmeg
+#if DYNAMIC images don't load correctly, use the most recent version of dcm2niix to fix
+
+parallel ./get_data.sh -n $SUBJECT -d $PROJ_PATH -s dcm2niix ::: $SUBJECT_LIST
+parallel ./organizing_data.sh -n $SUBJECT -d $PROJ_PATH -b pet_eeg_fmri ::: $SUBJECT_LIST
+
+## 2) recon-all
+
+parallel recon_all_pet.qsub
+
+## 3) Slice time correction, motion correction, registration, and cortex to ts:
+
+ parallel ./stcfsl_and_mc2_wrapper.sh -n $SUBJECT -d $PROJ_PATH -s $SCRIPTS -f 1 ::: $SUBJECT_LIST
+ parallel ./registration.sh -n $SUBJECT -d $PROJ_PATH ::: $SUBJECT_LIST
+ parallel ./cortex_to_ts.sh -n $SUBJECT -d $PROJ_PATH :::  $SUBJECT_LIST
+
+##############################################################################
+#2)eeg removal - #pet_anatomical_mask
+#nina fultz may 2021
+
+#purpose: to mask out eeg electrodes on memprages from PET scans, will allow us to have better looking attenuation maps for analysis
+#usage:
+#1) run biasfieldcorrect script
+#2) check biasfieldcorrect script
+#3) use mask from biasfieldcorrect script to determine threshold values
+#4) run fslmaths in order to make final memprage without electrodes
+
+
+#1) path on martinos center cluster: /autofs/cluster/ldl/nina/scripts/pet_scripts/
+
+parallel ./biasfieldcorrect --with-segmentation --overwrite $PROJ_DIR/$SUBJECT/anat/MEMPR_iso1mm.nii.gz $PROJ_DIR/$SUBJECT/anat/MEMPR_iso1mm_eegremoved.nii.gz ::: $SUBJECTLIST
+parallel ./eeg_removal.sh -n $SUBJECT -d $PROJ_DIR -b pet_eeg_fmri ::: $SUBJECTLIST
+
+#3) path on bu cluster: /ad/eng/research/eng_research_lewislab/users/nfultz/scripts/pet_analysis/pet_analysis
+
+#  open all eeg_removal and look at, use bone segmentation and then manually threshold # can automate probably # around a low of 0.06, high of 70 in GUI
+                1) manually segment a) bone b) other
+                2) save out as: MEMPR_iso1mm_other_thresholded.nii.gz MEMPR_iso1mm_bone_thresholded.nii.gz in eeg_removal path
+#       - tools > threshold mask
+#       - save out and check
+# notes of values:
+# racsleep_pilot01: no eeg - ANALYZED
+# racsleep02: no eeg - ANALYZED 
+# racsleep04_b: bone: .3, 70 other: used erode because threshold wasnt catching all electrodes - NEED TO CHECK
+!!!!!# racsleep05: bone: .6, 70 other: used erode because threshold wasnt catching all electrodes - RECON NEEDED
+# racsleep06: bone: .6, 70 other: used erode because threshold wasnt catching all electrodes - NEED TO CHECK
+recon not done
+# racsleep07: bone: .6, 70 other: none -- actually just removed, bias field correcitino was weird here  - NEED TO CHECK -- time was off on this subject, edited recon
+# racsleep08: bone: bone: .6, 70 other: used erode because threshold wasnt catching all electrodes - USED ORIGINAL UMAP
+# racsleep09: bone: .3, 70 other: used erode because threshold wasnt catching all electrodes ACTUALLY ENDED UP USING ORIGINAL UMAP BECAUSE IT LOOKED GOOD - ANALYZED
+# racsleep10: bone: bone: .6, 70 other: used erode # need to do - changed with UMAP
+#racsleep11: same as above
+#racsleep13: same as above, UMAP looks kind of bad, could not make look better-- think subject moved alot
+#racsleep14: same as above, UMAP looks good, some of middle facial features moved
+
+#4) run fslmaths: 1) adding segmentations together 2) removing electrodes in order to make final memprage without electrodes
+./masking_out_eeg.sh -n $SUBJECT
+                        #will make memprage_noeeg.nii.gz that will be what will have everything removed
+
+#5) copy over to aether:
+        a) get access to aether through Nicole
+        b) get onto mgh VPN through cisco (https://pvc.partners.org/saml)
+        c) use Microsoft remote desktop to logon to aether (Partners\nf869)
+        d) go to D:\Scratch\Laura
+        e) MAKE SURE YOUR NOEEG MEMPRAGE IS IN .nii format not .nii.gz file -- change this in above script
+        d) copy noeegmemprage over to D:\Scratch\Laura\SUBJECT\MR\MEMPRAGE
+        e) in matlab: piano_mMR -- make sure you already did organize files and have subjects.txt file --- this is only working for laura literally some weird permissions problem
+        f) now click Pseudo-AC
+        g) input NOEEG MEMPRAGE
+        h) run Pseudo-AC will take 2 hours 
+        i) will need to convert UMAP into dicom format 
+                        use ninas home directory attenuation to nifti script. 
+        j) use winzip to move files from aether to bay 7 
+        k) move the 12 (highres UMAP) to the racsleep subject/repalce on console
+        l) open retrorecon PET / import data into that part of console (click bottom part of browser in order to input, dont click on individual images or subject name
+        m) use sander rac preset  #changed for racsleep07 and racsleep13 because they wanted to end early
+
+#########################################################################################
+
+# # PET overview
+# 1) organize files
+# 2) run recon all 
+# 3) create segmentation for GTM
+# 4) register PET image with anatomical
+# 5) motion correction
+# 6) FASTMAP kinetic modelling
+
+#define
+PROJ_PATH=
+SUBJECT_LIST=()
+
+# 1) organizing files - moving mr and pet data into common folder
+az_moving_files.sh
+
+# 2) unpacking, recon all, brainstem recon, gtmseg
+
+#dicom unpacking
+parallel ./get_data.sh -n dicoms -d $PROJ_PATH/{} -s dcm2niix ::: $SUBJECT_LIST
+
+#recon all 
+parallel SUBJECTS_DIR=$PROJ_PATH/{} recon-all -all -subj fs -parallel -i $PROJ_PATH/{}/anat/Head_t1_mprage_sag_p2_iso.nii.gz ::: $SUBJECT_LIST
+
+#brainstemstructures
+parallel ./recon_brainstem.sh -n {} -d $PROJ_PATH ::: $SUBJECT_LIST
+
+#pet structures
+parallel export SUBJECTS_DIR=$PROJ_PATH/{} ./gtmseg --s fs/ ::: $SUBJECT_LIST
+
+#3) pet registration, pet motion correction
+
+parallel ./pet_registration.sh -n {} -d $PROJ_PATH -f NP3-kontrol.nii.gz ::: $SUBJECT_LIST
+parallel ./pet_motion_correction.sh -n {} -d $PROJ_PATH -f NP3-kontrol.nii.gz ::: $SUBJECT_LIST
+
+#4) making rois: brainstem overlays, cortex, amygdala, etc 
+parallel ./extract_rois.sh -n {} -d $PROJ_DIR ::: $SUBJECT_LIST
+parallel ./annot_lobes_to_niftis.sh -n {} -d $PROJ_DIR ::: $SUBJECT_LIST
+
+#5) turning labels into xyz txt file
+
+parallel matlab -nodisplay -r "voxel_to_xyz_all_rois_dynamic_space('$SUBJECT')" ::: $SUBJECT_LIST 
+
+#6) formatting and moving files into a fastmap folder
+parallel ./fastmap_organizing -n {} -d $PROJ_PATH -s $SCRIPTS ::: $SUBJECT_LIST 
+
+#7) displaying results (in jip_km folder): make sure to have source define-jip.bash added to your .bashrc file --- MAKE SURE TO RESTART WHEN YOU DO THIS. ALSO THIS FILE WILL INTERACT BADLY WITH OTHER THINGS LIKE RSYNC SO HAVE AN ENVIRONMENT YOU RUN THIS IN 
+    #can get FASTMAP path at martinos center, just copy over --use one version
+$JIP_PATH NP3-kontrol.nii.gz_mc.nii -o overlay-list.txt 
+
+#8) save out ROI as individual file (press big R in jip-display GUI)
+        #EXTRACTING INFORMATION:
+        #right click, can take out all curves , and extract text file #I asked JM to automate/and tried myself but am not great with C++, if someone could automate that would send a lot of time
+
+#9) take text files from .roi files
+ 
+parallel ./formatting_fastmap_rois.sh -n {} -s SRTM3_20min -d $PROJ_PATH ::: $SUBJECT_LIST
+## make figures !
+
+################## running pet FASTMAP analysis in batch/comparing BPND:
+#10) batch FASTMAP preparing files:
+
+parallel ./fastmap_multiple_timemodels.sh -n {} -d $PROJ_DIR -s $SCRIPTS -f NP3-kontrol.nii.gz_mc.nii ::: $SUBJECT_LIST
+#11) running FASTMAP for all files
+
+parallel ./batch_running_fastmap.sh -n {} -d $PROJ_DIR ::: $SUBJECT_LIST #automate this more
+
+############################################################################
