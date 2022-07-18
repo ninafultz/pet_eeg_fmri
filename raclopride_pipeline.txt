@@ -66,19 +66,6 @@ parallel ./eeg_removal.sh -n $SUBJECT -d $PROJ_DIR -b pet_eeg_fmri ::: $SUBJECTL
 #       - tools > threshold mask
 #       - save out and check
 # notes of values:
-# racsleep_pilot01: no eeg - ANALYZED
-# racsleep02: no eeg - ANALYZED 
-# racsleep04_b: bone: .3, 70 other: used erode because threshold wasnt catching all electrodes - NEED TO CHECK
-!!!!!# racsleep05: bone: .6, 70 other: used erode because threshold wasnt catching all electrodes - RECON NEEDED
-# racsleep06: bone: .6, 70 other: used erode because threshold wasnt catching all electrodes - NEED TO CHECK
-recon not done
-# racsleep07: bone: .6, 70 other: none -- actually just removed, bias field correcitino was weird here  - NEED TO CHECK -- time was off on this subject, edited recon
-# racsleep08: bone: bone: .6, 70 other: used erode because threshold wasnt catching all electrodes - USED ORIGINAL UMAP
-# racsleep09: bone: .3, 70 other: used erode because threshold wasnt catching all electrodes ACTUALLY ENDED UP USING ORIGINAL UMAP BECAUSE IT LOOKED GOOD - ANALYZED
-# racsleep10: bone: bone: .6, 70 other: used erode # need to do - changed with UMAP
-#racsleep11: same as above
-#racsleep13: same as above, UMAP looks kind of bad, could not make look better-- think subject moved alot
-#racsleep14: same as above, UMAP looks good, some of middle facial features moved
 
 #4) run fslmaths: 1) adding segmentations together 2) removing electrodes in order to make final memprage without electrodes
 ./masking_out_eeg.sh -n $SUBJECT
